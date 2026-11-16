@@ -16,18 +16,19 @@
   .bar { font-family: Helvetica, Arial, sans-serif; font-size: 3.2vw; margin-top: 3vw; border-top: 0.5vw solid #000; padding-top: 3vw; }
   .btn { display: inline-block; border: 0.3vw solid #000; padding: 1.2vw 2.6vw; margin: 0 1.2vw 1.6vw 0; text-decoration: none; color: #000; }
   .btn.on { background: #000; color: #fff; }
+  .btn.big { font-size: 4.4vw; padding: 2vw 3.4vw; border-width: 0.5vw; }
   #flash { display: none; position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: #000; }
 </style>
 </head>
 <body>
   <h1>Tierchen</h1>
-  <div class="sub">Clawd, Katze und Eselchen – Pixel-Animation für E-Ink</div>
+  <div class="sub">Tippe auf ein Tier – Pixel-Animation für E-Ink</div>
 
-  <div class="stage"><div class="name">Clawd</div><canvas id="c0"></canvas></div>
-  <div class="stage"><div class="name">Katze</div><canvas id="c1"></canvas></div>
-  <div class="stage"><div class="name">Eselchen</div><canvas id="c2"></canvas></div>
+  <div class="stage"><div class="name" id="name">Clawd</div><canvas id="c0"></canvas></div>
 
   <div class="bar">
+    <a class="btn big" href="#" data-animal="0">Clawd</a><a class="btn big" href="#" data-animal="1">Katze</a><a class="btn big" href="#" data-animal="2">Eselchen</a><a class="btn big" href="#" id="nextAnimal">Weiter ›</a>
+    <br>
     Tempo:
     <a class="btn" href="#" data-fps="0.5">½</a><a class="btn" href="#" data-fps="1">1</a><a class="btn" href="#" data-fps="2">2</a><a class="btn" href="#" data-fps="4">4</a><a class="btn" href="#" data-fps="8">8</a> Bilder/s
     <br>
@@ -177,38 +178,54 @@ var DONKEY = [
 ];
 
 // ---------- Zeichnen ----------
-var GRID_W = 40;          // Bühne ist 40 Pixel breit
-var actors = [
-  { canvas: document.getElementById("c0"), frames: CLAWD,  x: 4,  h: 12 },
-  { canvas: document.getElementById("c1"), frames: CAT,    x: 14, h: 14 },
-  { canvas: document.getElementById("c2"), frames: DONKEY, x: 10, h: 15 }
+var GRID_W = 30;          // Bühne ist 30 Pixel breit -> Tier wird schön groß
+var STAGE_H = 16;         // gemeinsame Bühnenhöhe, damit nichts springt
+var ANIMALS = [
+  { name: "Clawd",    frames: CLAWD },
+  { name: "Katze",    frames: CAT },
+  { name: "Eselchen", frames: DONKEY }
 ];
+var canvas = document.getElementById("c0"), ctx, px;
+var current = 0, x0 = 0;
 var frame = 0, fps = 1, walking = false, timer = null;
 var stamps = [];
 
-function setup(a){
-  var px = Math.max(2, Math.floor(a.canvas.clientWidth / GRID_W));
-  a.px = px;
-  a.canvas.width = GRID_W * px;
-  a.canvas.height = (a.h + 1) * px;
-  a.ctx = a.canvas.getContext("2d");
+function setup(){
+  px = Math.max(2, Math.floor(canvas.clientWidth / GRID_W));
+  canvas.width = GRID_W * px;
+  canvas.height = (STAGE_H + 1) * px;
+  ctx = canvas.getContext("2d");
 }
 
-function draw(a){
-  var f = a.frames[frame % a.frames.length], px = a.px, ctx = a.ctx;
-  var oy = a.h - f.length;
-  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, a.canvas.width, a.canvas.height);
+function spriteWidth(a){ return a.frames[0][a.frames[0].length - 1].length; }
+
+function showAnimal(i){
+  current = (i + ANIMALS.length) % ANIMALS.length;
+  var a = ANIMALS[current];
+  x0 = Math.floor((GRID_W - spriteWidth(a)) / 2); // mittig hinstellen
+  frame = 0;
+  document.getElementById("name").textContent = a.name;
+  var b = document.querySelectorAll("[data-animal]");
+  for (var k = 0; k < b.length; k++) b[k].className = "btn big" + (+b[k].getAttribute("data-animal") === current ? " on" : "");
+  try { localStorage.setItem("tier", current); } catch (e) {}
+  draw();
+}
+
+function draw(){
+  var f = ANIMALS[current].frames[frame % ANIMALS[current].frames.length];
+  var oy = STAGE_H - f.length;
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = "#000";
   for (var y = 0; y < f.length; y++)
     for (var x = 0; x < f[y].length; x++)
-      if (f[y].charAt(x) === "#") ctx.fillRect(((a.x + x) % GRID_W) * px, (oy + y) * px, px, px);
-  ctx.fillRect(0, a.h * px, a.canvas.width, Math.max(1, Math.floor(px / 3))); // Boden
+      if (f[y].charAt(x) === "#") ctx.fillRect(((x0 + x) % GRID_W) * px, (oy + y) * px, px, px);
+  ctx.fillRect(0, STAGE_H * px, canvas.width, Math.max(1, Math.floor(px / 3))); // Boden
 }
 
 function step(){
   frame++;
-  if (walking) for (var i = 0; i < actors.length; i++) actors[i].x = (actors[i].x + 1) % GRID_W;
-  for (var j = 0; j < actors.length; j++) draw(actors[j]);
+  if (walking) x0 = (x0 + 1) % GRID_W;
+  draw();
   var now = new Date().getTime(); stamps.push(now);
   while (stamps.length && now - stamps[0] > 5000) stamps.shift();
   if (stamps.length > 1)
@@ -231,7 +248,14 @@ document.getElementById("clean").onclick = function(e){ // einmal schwarz blitze
   setTimeout(function(){ f.style.display = "none"; }, 400);
 };
 
-for (var k = 0; k < actors.length; k++) setup(actors[k]);
+var ab = document.querySelectorAll("[data-animal]");
+for (var m = 0; m < ab.length; m++) ab[m].onclick = function(e){ e.preventDefault(); showAnimal(+this.getAttribute("data-animal")); };
+document.getElementById("nextAnimal").onclick = function(e){ e.preventDefault(); showAnimal(current + 1); };
+
+setup();
+var saved = 0;
+try { saved = +(localStorage.getItem("tier") || 0) || 0; } catch (e) {}
+showAnimal(saved);
 setFps(1);
 </script>
 </body>
