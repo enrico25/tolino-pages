@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Tolino Tierchen</title>
+<style>
+  /* E-Ink: nur Schwarz/Weiß, Pixel-Art, stufenweise Animation */
+  html, body { margin: 0; padding: 0; background: #fff; color: #000; }
+  body { font-family: Georgia, "Times New Roman", serif; padding: 4vw 5vw; }
+  h1 { font-size: 7vw; margin: 0 0 1vw; }
+  .sub { font-size: 3.4vw; margin-bottom: 3vw; }
+  .stage { border-top: 0.5vw solid #000; padding: 2.5vw 0 1vw; }
+  .name { font-family: Helvetica, Arial, sans-serif; font-size: 3vw; letter-spacing: 0.15em; text-transform: uppercase; font-weight: bold; }
+  canvas { display: block; width: 100%; image-rendering: pixelated; image-rendering: -webkit-optimize-contrast; margin-top: 1.5vw; }
+  .bar { font-family: Helvetica, Arial, sans-serif; font-size: 3.2vw; margin-top: 3vw; border-top: 0.5vw solid #000; padding-top: 3vw; }
+  .btn { display: inline-block; border: 0.3vw solid #000; padding: 1.2vw 2.6vw; margin: 0 1.2vw 1.6vw 0; text-decoration: none; color: #000; }
+  .btn.on { background: #000; color: #fff; }
+  #flash { display: none; position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: #000; }
+</style>
+</head>
+<body>
+  <h1>Tierchen</h1>
+  <div class="sub">Clawd, Katze und Eselchen – Pixel-Animation für E-Ink</div>
+
+  <div class="stage"><div class="name">Clawd</div><canvas id="c0"></canvas></div>
+  <div class="stage"><div class="name">Katze</div><canvas id="c1"></canvas></div>
+  <div class="stage"><div class="name">Eselchen</div><canvas id="c2"></canvas></div>
+
+  <div class="bar">
+    Tempo:
+    <a class="btn" href="#" data-fps="0.5">½</a><a class="btn" href="#" data-fps="1">1</a><a class="btn" href="#" data-fps="2">2</a><a class="btn" href="#" data-fps="4">4</a><a class="btn" href="#" data-fps="8">8</a> Bilder/s
+    <br>
+    <a class="btn" href="#" id="walk">Laufen</a>
+    <a class="btn" href="#" id="clean">Bildschirm putzen</a>
+    <a class="btn" href="index.html">Dashboard</a>
+    <div id="fps">gemessen: –</div>
+  </div>
+  <div id="flash"></div>
+
+<script>
+// ---------- Pixel-Sprites: "#" = schwarz, alles andere = weiß ----------
+// Clawd: eigene Pixel-Interpretation des Claude-Code-Maskottchens
+var CLAWD_BODY = [
+  "...##########...",
+  "...##########...",
+  "...###.##.###...",
+  "...###.##.###...",
+  ".##############.",
+  ".##############.",
+  "...##########...",
+  "...##########..."
+];
+var CLAWD_BLINK = [
+  "...##########...",
+  "...##########...",
+  "...##########...",
+  "...###.##.###...",
+  ".##############.",
+  ".##############.",
+  "...##########...",
+  "...##########..."
+];
+var CLAWD_WAVE = [
+  "...##########.#.",
+  "...##########.#.",
+  "...###.##.######",
+  "...###.##.######",
+  ".############...",
+  ".############...",
+  "...##########...",
+  "...##########..."
+];
+var LEGS_A = ["....#.#..#.#....", "....#.#..#.#...."];
+var LEGS_B = ["...#..#..#..#...", "...#...##...#..."];
+var CLAWD = [
+  CLAWD_BODY.concat(LEGS_A),
+  CLAWD_BODY.concat(LEGS_B),
+  CLAWD_BODY.concat(LEGS_A),
+  CLAWD_BLINK.concat(LEGS_A),
+  CLAWD_WAVE.concat(LEGS_A),
+  CLAWD_WAVE.concat(LEGS_B)
+];
+
+// Katze: sitzt, schaut nach rechts, Schwanz wedelt, blinzelt
+var CAT_HEAD = [
+  "...........#...#",
+  "...........##.##",
+  "...........#####",
+  "...........#.#.#",
+  "...........#####",
+  "............###."
+];
+var CAT_HEAD_BLINK = [
+  "...........#...#",
+  "...........##.##",
+  "...........#####",
+  "...........#####",
+  "...........#####",
+  "............###."
+];
+var CAT_BODY = [
+  ".........######.",
+  "........#######.",
+  ".......########.",
+  ".......########.",
+  ".......########.",
+  "........##.#.##.",
+  "........##.#.##."
+];
+function overlay(rows, pts){ // setzt zusätzliche schwarze Pixel
+  var r = rows.slice();
+  for (var i = 0; i < pts.length; i++) {
+    var y = pts[i][0], x = pts[i][1], s = r[y];
+    r[y] = s.substring(0, x) + "#" + s.substring(x + 1);
+  }
+  return r;
+}
+var TAIL_UP   = [[5,2],[6,1],[7,1],[8,2],[9,3],[9,4],[10,5],[10,6]];
+var TAIL_MID  = [[7,0],[8,1],[8,2],[9,3],[9,4],[10,5],[10,6]];
+var TAIL_DOWN = [[11,0],[11,1],[10,2],[10,3],[10,4],[10,5],[10,6]];
+var CAT = [
+  overlay(CAT_HEAD.concat(CAT_BODY), TAIL_UP),
+  overlay(CAT_HEAD.concat(CAT_BODY), TAIL_MID),
+  overlay(CAT_HEAD.concat(CAT_BODY), TAIL_DOWN),
+  overlay(CAT_HEAD.concat(CAT_BODY), TAIL_MID),
+  overlay(CAT_HEAD_BLINK.concat(CAT_BODY), TAIL_UP),
+  overlay(CAT_HEAD.concat(CAT_BODY), TAIL_UP)
+];
+
+// Eselchen: lange Ohren, Beine im Schritt, Ohr wackelt, I-Aah
+var DONKEY_TOP = [
+  "...............#..#...",
+  "...............#..#...",
+  "...............#..#...",
+  "..............######..",
+  "..............#.#####.",
+  ".............#########",
+  ".............########.",
+  "............####......"
+];
+var DONKEY_EAR = [
+  "..............#...#...",
+  "...............#..#...",
+  "...............#..#...",
+  "..............######..",
+  "..............#.#####.",
+  ".............#########",
+  ".............########.",
+  "............####......"
+];
+var DONKEY_HEEHAW = [
+  "...............#..#...",
+  "...............#..#...",
+  "...............#..#...",
+  "..............######..",
+  "..............#.#####.",
+  ".............#########",
+  ".............#####..##",
+  "............####......"
+];
+var DONKEY_BODY = [
+  "..##############......",
+  ".################.....",
+  "#.###############.....",
+  "..##############......"
+];
+var D_LEGS_A = ["..#..#......#..#......", "..#..#......#..#......"];
+var D_LEGS_B = ["...#.#......#.#.......", "..#...#....#...#......"];
+var DONKEY = [
+  DONKEY_TOP.concat(DONKEY_BODY, D_LEGS_A),
+  DONKEY_TOP.concat(DONKEY_BODY, D_LEGS_B),
+  DONKEY_EAR.concat(DONKEY_BODY, D_LEGS_A),
+  DONKEY_TOP.concat(DONKEY_BODY, D_LEGS_B),
+  DONKEY_HEEHAW.concat(DONKEY_BODY, D_LEGS_A),
+  DONKEY_TOP.concat(DONKEY_BODY, D_LEGS_A)
+];
+
+// ---------- Zeichnen ----------
+var GRID_W = 40;          // Bühne ist 40 Pixel breit
+var actors = [
+  { canvas: document.getElementById("c0"), frames: CLAWD,  x: 4,  h: 12 },
+  { canvas: document.getElementById("c1"), frames: CAT,    x: 14, h: 14 },
+  { canvas: document.getElementById("c2"), frames: DONKEY, x: 10, h: 15 }
+];
+var frame = 0, fps = 1, walking = false, timer = null;
+var stamps = [];
+
+function setup(a){
+  var px = Math.max(2, Math.floor(a.canvas.clientWidth / GRID_W));
+  a.px = px;
+  a.canvas.width = GRID_W * px;
+  a.canvas.height = (a.h + 1) * px;
+  a.ctx = a.canvas.getContext("2d");
+}
+
+function draw(a){
+  var f = a.frames[frame % a.frames.length], px = a.px, ctx = a.ctx;
+  var oy = a.h - f.length;
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, a.canvas.width, a.canvas.height);
+  ctx.fillStyle = "#000";
+  for (var y = 0; y < f.length; y++)
+    for (var x = 0; x < f[y].length; x++)
+      if (f[y].charAt(x) === "#") ctx.fillRect(((a.x + x) % GRID_W) * px, (oy + y) * px, px, px);
+  ctx.fillRect(0, a.h * px, a.canvas.width, Math.max(1, Math.floor(px / 3))); // Boden
+}
+
+function step(){
+  frame++;
+  if (walking) for (var i = 0; i < actors.length; i++) actors[i].x = (actors[i].x + 1) % GRID_W;
+  for (var j = 0; j < actors.length; j++) draw(actors[j]);
+  var now = new Date().getTime(); stamps.push(now);
+  while (stamps.length && now - stamps[0] > 5000) stamps.shift();
+  if (stamps.length > 1)
+    document.getElementById("fps").textContent = "gemessen: " + ((stamps.length - 1) * 1000 / (now - stamps[0])).toFixed(1) + " Bilder/s";
+  timer = setTimeout(step, 1000 / fps);
+}
+
+function setFps(v){
+  fps = v; stamps = [];
+  var b = document.querySelectorAll("[data-fps]");
+  for (var i = 0; i < b.length; i++) b[i].className = "btn" + (parseFloat(b[i].getAttribute("data-fps")) === v ? " on" : "");
+  clearTimeout(timer); step();
+}
+
+var btns = document.querySelectorAll("[data-fps]");
+for (var i = 0; i < btns.length; i++) btns[i].onclick = function(e){ e.preventDefault(); setFps(parseFloat(this.getAttribute("data-fps"))); };
+document.getElementById("walk").onclick = function(e){ e.preventDefault(); walking = !walking; this.className = "btn" + (walking ? " on" : ""); };
+document.getElementById("clean").onclick = function(e){ // einmal schwarz blitzen gegen Geisterbilder
+  e.preventDefault(); var f = document.getElementById("flash"); f.style.display = "block";
+  setTimeout(function(){ f.style.display = "none"; }, 400);
+};
+
+for (var k = 0; k < actors.length; k++) setup(actors[k]);
+setFps(1);
+</script>
+</body>
+</html>

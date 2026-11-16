@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Tolino Dashboard</title>
+<style>
+  /* Optimiert für E-Ink: nur Schwarz/Weiß, keine Animationen, große Schrift */
+  html, body { margin: 0; padding: 0; background: #fff; color: #000; }
+  body { font-family: Georgia, "Times New Roman", serif; padding: 5vw 6vw; }
+  .clock { font-size: 24vw; line-height: 1; font-weight: bold; letter-spacing: -0.02em; margin-top: 2vw; }
+  .date { font-size: 6vw; margin-top: 2vw; }
+  .meta { font-size: 3.6vw; margin-top: 1.5vw; }
+  .rule { border: 0; border-top: 0.6vw solid #000; margin: 5vw 0; }
+  .thin { border-top-width: 0.25vw; margin: 4vw 0; }
+  .label { font-family: Helvetica, Arial, sans-serif; font-size: 3vw; letter-spacing: 0.15em; text-transform: uppercase; font-weight: bold; }
+  .weather-now { font-size: 9vw; font-weight: bold; margin-top: 1.5vw; }
+  .weather-desc { font-size: 4.6vw; margin-top: 1vw; }
+  .forecast { width: 100%; border-collapse: collapse; margin-top: 3vw; font-size: 4vw; }
+  .forecast td { padding: 1.2vw 0; border-top: 0.2vw solid #000; }
+  .forecast td.r { text-align: right; }
+  .quote { font-size: 5vw; line-height: 1.4; font-style: italic; margin-top: 2vw; }
+  .source { font-size: 3.6vw; margin-top: 2.5vw; }
+  .hint { font-family: Helvetica, Arial, sans-serif; font-size: 2.6vw; margin-top: 4vw; }
+  .btn { display: inline-block; border: 0.3vw solid #000; padding: 1.2vw 3vw; margin-right: 2vw; text-decoration: none; color: #000; font-family: Helvetica, Arial, sans-serif; font-size: 3.2vw; }
+</style>
+</head>
+<body>
+  <div class="clock" id="clock">--:--</div>
+  <div class="date" id="date"></div>
+  <div class="meta" id="meta"></div>
+
+  <hr class="rule">
+
+  <div id="weather-box">
+    <div class="label">Wetter <span id="place"></span></div>
+    <div class="weather-now" id="w-now">…</div>
+    <div class="weather-desc" id="w-desc"></div>
+    <table class="forecast" id="w-days"></table>
+    <div id="setup" style="display:none">
+      <div class="weather-desc">Ort fürs Wetter eingeben:</div>
+      <input id="city" type="text" placeholder="z. B. Hamburg" style="font-size:5vw;width:60%;border:0.3vw solid #000;padding:1vw;margin-top:2vw">
+      <a class="btn" href="#" id="save">OK</a>
+      <a class="btn" href="#" id="nowx">Ohne Wetter</a>
+      <div class="hint" id="setup-msg"></div>
+    </div>
+  </div>
+
+  <hr class="rule">
+  <div class="hint">
+    <a class="btn" href="tiere.html">Tierchen</a>
+    <a class="btn" href="#" id="reload">Aktualisieren</a>
+    <a class="btn" href="#" id="reset">Ort ändern</a>
+  </div>
+
+<script>
+// ================== EINSTELLUNGEN ==================
+// Ort wird direkt auf dem Tolino eingegeben und im Browser gespeichert
+var LOC = null;
+try { LOC = JSON.parse(localStorage.getItem("dash_loc") || "null"); } catch (e) {}
+if (!LOC) LOC = { name: "Erfurt", lat: 50.98, lon: 11.03 }; // Standardort
+var WEATHER_EVERY_MIN = 30;
+// ===================================================
+
+
+var DAYS = ["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"];
+var DAYS_SHORT = ["So","Mo","Di","Mi","Do","Fr","Sa"];
+var MONTHS = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+var WMO = {0:"Klar",1:"Überwiegend klar",2:"Teils bewölkt",3:"Bedeckt",45:"Nebel",48:"Reifnebel",
+  51:"Leichter Niesel",53:"Niesel",55:"Starker Niesel",56:"Gefrierender Niesel",57:"Gefrierender Niesel",
+  61:"Leichter Regen",63:"Regen",65:"Starker Regen",66:"Gefrierender Regen",67:"Gefrierender Regen",
+  71:"Leichter Schnee",73:"Schnee",75:"Starker Schnee",77:"Schneegriesel",
+  80:"Regenschauer",81:"Regenschauer",82:"Heftige Schauer",85:"Schneeschauer",86:"Schneeschauer",
+  95:"Gewitter",96:"Gewitter mit Hagel",99:"Gewitter mit Hagel"};
+
+function $(id){ return document.getElementById(id); }
+function pad(n){ return (n < 10 ? "0" : "") + n; }
+function setText(id, s){ var el = $(id); if (el.textContent !== s) el.textContent = s; } // nur bei Änderung neu zeichnen
+
+function isoWeek(d){
+  var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  var day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day);
+  var y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return Math.ceil(((t - y0) / 86400000 + 1) / 7);
+}
+function dayOfYear(d){
+  return Math.floor((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - new Date(d.getFullYear(), 0, 1)) / 86400000) + 1;
+}
+
+function tick(){
+  var d = new Date();
+  setText("clock", pad(d.getHours()) + ":" + pad(d.getMinutes()));
+  setText("date", DAYS[d.getDay()] + ", " + d.getDate() + ". " + MONTHS[d.getMonth()] + " " + d.getFullYear());
+  setText("meta", "KW " + isoWeek(d) + "  ·  Tag " + dayOfYear(d));
+}
+
+
+// HTTPS zuerst; altes Android kennt neue Zertifikate evtl. nicht -> Fallback auf HTTP
+function getJSON(url, cb){
+  function go(u, retry){
+    var x = new XMLHttpRequest();
+    x.onreadystatechange = function(){
+      if (x.readyState !== 4) return;
+      if (x.status === 200) { try { cb(JSON.parse(x.responseText)); } catch (e) { cb(null); } return; }
+      if (retry) go(u.replace(/^https:/, "http:"), false); else cb(null);
+    };
+    x.open("GET", u, true); x.send();
+  }
+  go(url, true);
+}
+
+function loadWeather(){
+  if (!LOC) { $("setup").style.display = "block"; setText("w-now", ""); return; }
+  if (LOC.off) { $("weather-box").style.display = "none"; return; }
+  $("setup").style.display = "none";
+  setText("place", LOC.name);
+  var url = "https://api.open-meteo.com/v1/forecast?latitude=" + LOC.lat + "&longitude=" + LOC.lon +
+    "&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m" +
+    "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
+    "&timezone=auto&forecast_days=4";
+  getJSON(url, function(r){
+    if (!r) { setText("w-now", "Kein Netz"); setText("w-desc", "WLAN am Tolino an?"); return; }
+    var c = r.current, dd = r.daily;
+    setText("w-now", Math.round(c.temperature_2m) + "°  " + (WMO[c.weather_code] || ""));
+    setText("w-desc", "Gefühlt " + Math.round(c.apparent_temperature) + "°  ·  Wind " + Math.round(c.wind_speed_10m) + " km/h  ·  Stand " +
+      pad(new Date().getHours()) + ":" + pad(new Date().getMinutes()));
+    var html = "";
+    for (var i = 0; i < dd.time.length; i++) {
+      var p = dd.time[i].split("-"), day = new Date(+p[0], +p[1] - 1, +p[2]);
+      html += "<tr><td>" + (i === 0 ? "Heute" : DAYS_SHORT[day.getDay()]) + "</td><td>" + (WMO[dd.weather_code[i]] || "") +
+        "</td><td class='r'>" + Math.round(dd.temperature_2m_min[i]) + "° / " + Math.round(dd.temperature_2m_max[i]) + "°</td>" +
+        "<td class='r'>" + (dd.precipitation_probability_max[i] == null ? "" : dd.precipitation_probability_max[i] + "%") + "</td></tr>";
+    }
+    $("w-days").innerHTML = html;
+  });
+}
+
+function saveLoc(l){ LOC = l; try { localStorage.setItem("dash_loc", JSON.stringify(l)); } catch (e) {} $("weather-box").style.display = "block"; loadWeather(); }
+$("save").onclick = function(e){
+  e.preventDefault();
+  var name = $("city").value.replace(/^\s+|\s+$/g, ""); if (!name) return;
+  setText("setup-msg", "Suche …");
+  getJSON("https://geocoding-api.open-meteo.com/v1/search?count=1&language=de&name=" + encodeURIComponent(name), function(r){
+    r = r || {};
+    if (!r.results || !r.results.length) { setText("setup-msg", "Ort nicht gefunden – oder kein Netz."); return; }
+    var g = r.results[0];
+    saveLoc({ name: g.name, lat: g.latitude, lon: g.longitude });
+  });
+};
+$("nowx").onclick = function(e){ e.preventDefault(); saveLoc({ off: true }); };
+$("reset").onclick = function(e){ e.preventDefault(); try { localStorage.removeItem("dash_loc"); } catch (x) {} location.reload(); };
+$("reload").onclick = function(e){ e.preventDefault(); location.reload(); };
+
+tick(); loadWeather();
+setInterval(tick, 20000);
+setInterval(loadWeather, WEATHER_EVERY_MIN * 60000);
+// Einmal pro Stunde komplett neu laden: neues Tageszitat + E-Ink-Geisterbilder weg
+setTimeout(function(){ location.reload(); }, 3600000);
+</script>
+</body>
+</html>
