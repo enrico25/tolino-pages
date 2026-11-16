@@ -7,39 +7,41 @@
 <style>
   /* E-Ink: Schwarz/Weiß + Graustufenfotos, große Schrift, keine weichen Animationen */
   html, body { margin: 0; padding: 0; background: #fff; color: #000; }
-  body { font-family: Georgia, "Times New Roman", serif; padding: 4vw 5vw; }
-  .top { font-family: Helvetica, Arial, sans-serif; font-size: 3vw; letter-spacing: 0.15em; text-transform: uppercase; font-weight: bold; border-bottom: 0.5vw solid #000; padding-bottom: 1.5vw; }
+  /* Alles muss auf einen Tolino-Bildschirm passen (6 Zoll, ohne Scrollen) -> Größen in vmin */
+  body { font-family: Georgia, "Times New Roman", serif; padding: 2.5vmin 4vmin; }
+  .top { font-family: Helvetica, Arial, sans-serif; font-size: 2.4vmin; letter-spacing: 0.15em; text-transform: uppercase; font-weight: bold; border-bottom: 0.4vmin solid #000; padding-bottom: 1vmin; }
   .top span { float: right; letter-spacing: 0; }
-  h1 { font-size: 8vw; margin: 3vw 0 0; line-height: 1.05; }
-  .project { font-size: 4.2vw; margin-top: 1vw; font-style: italic; }
-  .pic { margin-top: 3vw; text-align: center; }
-  .pic img { max-width: 100%; max-height: 62vw; display: inline-block; }
-  .pic canvas { width: 100%; image-rendering: pixelated; image-rendering: -webkit-optimize-contrast; display: block; }
-  .credit { font-family: Helvetica, Arial, sans-serif; font-size: 2.4vw; margin-top: 0.8vw; text-align: right; }
-  .desc { font-size: 3.8vw; line-height: 1.35; margin-top: 2.5vw; }
-  .quote { font-size: 5.6vw; line-height: 1.3; font-weight: bold; margin-top: 3.5vw; border-top: 0.5vw solid #000; padding-top: 3vw; }
-  .trans { font-size: 4vw; line-height: 1.35; font-style: italic; margin-top: 1.5vw; }
-  .source { font-size: 3.2vw; margin-top: 2vw; }
-  .bar { font-family: Helvetica, Arial, sans-serif; margin-top: 4vw; border-top: 0.5vw solid #000; padding-top: 3vw; }
-  .btn { display: inline-block; border: 0.4vw solid #000; padding: 1.6vw 3vw; margin: 0 1.2vw 1.6vw 0; text-decoration: none; color: #000; font-size: 4vw; }
-  .btn.small { font-size: 3.2vw; padding: 1.2vw 2.4vw; border-width: 0.3vw; }
+  h1 { font-size: 6.4vmin; margin: 1.6vmin 0 0; line-height: 1.05; }
+  .project { font-size: 3.3vmin; margin-top: 0.4vmin; font-style: italic; }
+  .row { margin-top: 2vmin; overflow: hidden; }
+  .left { float: left; width: 44%; margin-right: 3vmin; }
+  .pic { text-align: center; }
+  .pic img { max-width: 100%; max-height: 34vh; display: inline-block; }
+  .pic canvas { image-rendering: pixelated; image-rendering: -webkit-optimize-contrast; display: block; }
+  .credit { font-family: Helvetica, Arial, sans-serif; font-size: 1.9vmin; margin-top: 0.5vmin; text-align: center; }
+  .desc { font-size: 3vmin; line-height: 1.3; }
+  .quote { font-size: 4.2vmin; line-height: 1.25; font-weight: bold; margin-top: 2vmin; border-top: 0.4vmin solid #000; padding-top: 1.8vmin; }
+  .trans { font-size: 3.1vmin; line-height: 1.3; font-style: italic; margin-top: 1vmin; }
+  .source { font-size: 2.5vmin; margin-top: 1vmin; }
+  .bar { font-family: Helvetica, Arial, sans-serif; margin-top: 2vmin; border-top: 0.4vmin solid #000; padding-top: 1.8vmin; white-space: nowrap; }
+  .btn { display: inline-block; border: 0.35vmin solid #000; padding: 1.2vmin 2.4vmin; margin: 0 1vmin 0 0; text-decoration: none; color: #000; font-size: 3.2vmin; }
+  .btn.small { font-size: 2.6vmin; padding: 1.2vmin 1.6vmin; border-width: 0.25vmin; }
 </style>
 </head>
 <body>
   <div class="top">Inspiration <span id="count"></span></div>
   <h1 id="who"></h1>
   <div class="project" id="project"></div>
-  <div class="pic" id="pic"></div>
-  <div class="credit" id="credit"></div>
-  <div class="desc" id="desc"></div>
+  <div class="row">
+    <div class="left"><div class="pic" id="pic"></div><div class="credit" id="credit"></div></div>
+    <div class="desc" id="desc"></div>
+  </div>
   <div class="quote" id="quote"></div>
   <div class="trans" id="trans"></div>
   <div class="source" id="source"></div>
 
   <div class="bar">
-    <a class="btn" href="#" id="prev">‹ Zurück</a><a class="btn" href="#" id="next">Weiter ›</a><a class="btn" href="#" id="rand">Zufall</a>
-    <br>
-    <a class="btn small" href="index.html">Dashboard</a><a class="btn small" href="tiere.html">Tierchen</a>
+    <a class="btn" href="#" id="prev">‹</a><a class="btn" href="#" id="next">Weiter ›</a><a class="btn" href="#" id="rand">Zufall</a><a class="btn small" href="index.html">Dashboard</a><a class="btn small" href="tiere.html">Tiere</a>
   </div>
 
 <script>
@@ -193,7 +195,8 @@ function show(i){
   } else {
     canvas = document.createElement("canvas"); pic.appendChild(canvas);
     var g0 = p.pixel(0), w = g0[0].length, h = g0.length;
-    px = Math.max(2, Math.floor(Math.min(pic.clientWidth / w, pic.clientWidth * 0.55 / h)));
+    var maxH = window.innerHeight * 0.30;
+    px = Math.max(2, Math.floor(Math.min(pic.clientWidth / w, maxH / h)));
     canvas.width = w * px; canvas.height = h * px;
     canvas.style.width = (w * px) + "px"; canvas.style.margin = "0 auto";
     ctx = canvas.getContext("2d");
